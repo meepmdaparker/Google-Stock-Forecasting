@@ -1,0 +1,101 @@
+from flask import Flask, redirect, render_template, request, session, url_for, Response, send_file
+import os
+import io
+import sqlite3 as sl
+from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
+import pandas as pd
+from datetime import datetime 
+from plotnine import *
+import math
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+import datetime
+import pandas as pd
+
+
+#Big Data
+df = pd.read_csv('GOOGL.csv')
+
+#Data Wrangling (no missing values)
+df.isna().sum()
+#Data Wrangling (changing date to a datetime object)
+#usingn pandas for manipulation of data
+df['Date'] = df['Date'].apply(pd.to_datetime)
+train_data = df
+train_data.set_index('Date', inplace=True)
+#setting date as index
+
+#Pulling things I learned from DSO 424 Business Forecasting/DSO 459 
+#engineering new features for the dataset to calculate meaningful aggregations
+#HL_PCT calculates for the high-low percentage for each day
+#PCT_change calculates for the open-close percentage for each day
+train_data['HL_PCT'] = (train_data['High'] - train_data['Low']) / train_data['Low'] * 100.0
+train_data['PCT_change'] = (train_data['Close'] - train_data['Open']) / train_data['Open'] * 100.0
+df2 = train_data[['HL_PCT', 'PCT_change', 'Adj Close','Volume']]
+
+forecast_out = int(math.ceil(0.05 * len(df2))) # forcasting out 5% of the entire dataset
+#forecast_out = int(np.ceil(0.05 * len(df)))
+# print(forecast_out) 
+#forecast out the next 52 values ^
+
+df2['label'] = df2['Adj Close'].shift(-forecast_out)
+#forecast the stock prices for days and months to come, we are going to shift 
+#the Adj. Close column to create room for the predictions of the days to come by 52
+
+#scaling data
+scaler = StandardScaler()
+X = np.array(df2.drop(['label'], 1))
+scaler.fit(X)
+X = scaler.transform(X)
+
+X_Predictions = X[-forecast_out:] # prediction
+X = X[:-forecast_out] # training
+df2.dropna(inplace=True)
+y = np.array(df2['label'])
+
+#train test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+#applying random forest regressor model to make prediction
+rf = RandomForestRegressor()
+rf.fit(X_train, y_train)
+rf_confidence = rf.score(X_test, y_test)
+
+
+last_date = df2.index[-1] #getting the lastdate in the dataset
+last_unix = last_date.timestamp() #converting it to time in seconds
+one_day = 86400 #one day equals 86400 seconds
+next_unix = last_unix + one_day # getting the time in seconds for the next day
+forecast_set = rf.predict(X_Predictions) # predicting forecast data
+df2['Forecast'] = np.nan
+for i in forecast_set:
+    next_date = datetime.datetime.fromtimestamp(next_unix)
+    next_unix += 86400
+    df2.loc[next_date] = [np.nan for _ in range(len(df2.columns)-1)]+[i]
+    
+    #visualization of prediction
+def prediction_figure():
+    plt.figure(figsize=(18, 8))
+    df2['Adj Close'].plot()
+    df2['Forecast'].plot()
+    plt.legend(loc=4)
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.title('Google Adjusted Closing Price over Time with Random Forest Regressor Prediction Forecasting')
+    plt.show()
+
+# prediction_figure()
+
+#original graph with no machine learning 
+def original_figure():
+    plt.figure(figsize=(18, 8))
+    df['Adj Close'].plot()
+    plt.legend(loc=4)
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.title('Google Adjusted Closing Price over Time')
+    plt.show()
+# original_figure()
