@@ -28,7 +28,7 @@ train_data = df
 train_data.set_index('Date', inplace=True)
 #setting date as index
 
-#Pulling things I learned from DSO 424 Business Forecasting/DSO 459 
+
 #engineering new features for the dataset to calculate meaningful aggregations
 #HL_PCT calculates for the high-low percentage for each day
 #PCT_change calculates for the open-close percentage for each day
